@@ -1,0 +1,137 @@
+-- ============================================================
+-- Medidas DAX para el dashboard de desempeño comercial
+-- Crear estas medidas en Power BI Desktop dentro de la tabla
+-- fact_sales o en una tabla de medidas independiente.
+-- ============================================================
+
+
+-- ------------------------------------------------------------
+-- INGRESOS Y VOLUMEN
+-- ------------------------------------------------------------
+
+-- Ingresos netos totales
+Total Sales =
+SUM(fact_sales[sales])
+
+-- Total de pedidos únicos
+Total Orders =
+DISTINCTCOUNT(fact_sales[order_id])
+
+-- Unidades vendidas
+Total Units =
+SUM(fact_sales[quantity])
+
+-- Ticket promedio por pedido
+Avg Order Value =
+DIVIDE([Total Sales], [Total Orders])
+
+
+-- ------------------------------------------------------------
+-- RENTABILIDAD
+-- ------------------------------------------------------------
+
+-- Beneficio total
+Total Profit =
+SUM(fact_sales[profit])
+
+-- Margen bruto en porcentaje
+Profit Margin % =
+DIVIDE([Total Profit], [Total Sales])
+
+-- Descuento promedio aplicado
+Avg Discount % =
+AVERAGE(fact_sales[discount])
+
+-- Margen de contribución por producto (ingresos menos descuentos)
+Contribution Margin =
+SUMX(
+    fact_sales,
+    fact_sales[sales] - (fact_sales[sales] * fact_sales[discount])
+)
+
+
+-- ------------------------------------------------------------
+-- COMPARATIVOS TEMPORALES
+-- ------------------------------------------------------------
+
+-- Ingresos del mismo periodo del año anterior
+Sales LY =
+CALCULATE(
+    [Total Sales],
+    SAMEPERIODLASTYEAR(dim_date[full_date])
+)
+
+-- Variación de ingresos vs año anterior (valor absoluto)
+Sales vs LY =
+[Total Sales] - [Sales LY]
+
+-- Variación de ingresos vs año anterior (porcentaje)
+Sales vs LY % =
+DIVIDE([Sales vs LY], [Sales LY])
+
+-- Ingresos acumulados en el año (YTD)
+Sales YTD =
+TOTALYTD([Total Sales], dim_date[full_date])
+
+-- Beneficio acumulado en el año (YTD)
+Profit YTD =
+TOTALYTD([Total Profit], dim_date[full_date])
+
+-- Variación intermensual de ingresos (MoM %)
+Sales MoM % =
+VAR current_month = [Total Sales]
+VAR prev_month =
+    CALCULATE(
+        [Total Sales],
+        DATEADD(dim_date[full_date], -1, MONTH)
+    )
+RETURN
+    DIVIDE(current_month - prev_month, prev_month)
+
+
+-- ------------------------------------------------------------
+-- ANÁLISIS DE DESCUENTOS
+-- ------------------------------------------------------------
+
+-- Ingresos generados sin ningún descuento aplicado
+Sales No Discount =
+CALCULATE(
+    [Total Sales],
+    fact_sales[discount] = 0
+)
+
+-- Pérdida de ingresos atribuible a los descuentos
+Discount Impact =
+SUMX(
+    fact_sales,
+    fact_sales[sales] * fact_sales[discount]
+)
+
+-- Margen efectivo considerando el impacto real del descuento
+Effective Margin % =
+DIVIDE(
+    [Total Profit],
+    [Total Sales] - [Discount Impact]
+)
+
+
+-- ------------------------------------------------------------
+-- RANKING Y SEGMENTACIÓN
+-- ------------------------------------------------------------
+
+-- Ranking de productos por ingresos dentro de su categoría
+Product Rank by Sales =
+RANKX(
+    ALLSELECTED(dim_products[product_name]),
+    [Total Sales],
+    ,
+    DESC,
+    DENSE
+)
+
+-- Porcentaje de ingresos del producto sobre el total general
+Sales % of Total =
+DIVIDE(
+    [Total Sales],
+    CALCULATE([Total Sales], ALL(fact_sales))
+)
